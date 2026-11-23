@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>GymScheduleBot · Muscle-building plans that fit your week</title>
+  <meta name="description" content="A muscle-building planner that reads your schedule and fits the right training split into your week.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232d6a4d'/%3E%3Cpath d='M10 11v10M22 11v10M7 14v4M25 14v4M10 16h12' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-tz="{{ settings.timezone }}" data-week="{{ week_iso }}" data-first-visit="{{ 'true' if first_visit else 'false' }}">
+<div class="app">
+
+  <!-- ===================================================== calendar -->
+  <main class="plan-pane">
+    <header class="top-bar">
+      <span class="brand">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
+        GymScheduleBot
+      </span>
+      <div class="top-actions">
+        {% if google_connected %}
+        <button type="button" class="google-chip" data-action="sync-preview">
+          <span class="g-mark" aria-hidden="true">G</span>Google Calendar
+          <span class="chip-status">{{ google_last_sync or 'Not synced yet' }}</span>
+        </button>
+        {% elif google_configured %}
+        <a class="google-chip" href="/auth/google/login"><span class="g-mark" aria-hidden="true">G</span>Connect Google Calendar</a>
+        {% else %}
+        <span class="google-chip disabled" title="Google sign-in isn't set up on this server"><span class="g-mark" aria-hidden="true">G</span>Google Calendar</span>
+        {% endif %}
+        <button type="button" class="tool-btn" data-action="open-preferences" aria-expanded="false" aria-controls="prefs">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span class="btn-label">Preferences</span>
+        </button>
+        <div class="menu-wrap">
+          <button type="button" class="tool-btn icon-only" data-action="toggle-menu" aria-label="More actions" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>
+          </button>
+          <div class="menu" id="menu" role="menu" hidden>
+            <button type="button" role="menuitem" data-action="replan">Re-plan and explain my week</button>
+            <button type="button" role="menuitem" data-action="screenshot">Read a schedule screenshot</button>
+            <form method="post" action="/export.ics" class="export-form">
+              <input type="hidden" name="events"><input type="hidden" name="moves"><input type="hidden" name="week">
+              <button type="submit" role="menuitem">Download this week (.ics)</button>
+            </form>
+            <button type="button" role="menuitem" data-action="clear-events">Delete all my commitments</button>
+            <button type="button" role="menuitem" data-action="reset-preferences">Reset preferences</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="undo-bar" id="undo-bar" role="status" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span id="undo-text"></span>
+      <button type="button" class="small-btn" data-action="undo">Undo</button>
+    </div>
+
+    <div id="plan-region">
+      {% include "_plan.html" %}
+    </div>
+  </main>
+
+  <!-- ===================================================== AI coach -->
+  <aside class="coach" aria-label="AI Coach">
+    <header class="coach-head">
+      <span class="bot-avatar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 4.5V8M9.5 13h.01M14.5 13h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </span>
+      <div>
+        <h2>AI Coach</h2>
+        <p class="status"><span class="dot{{ ' on' if ai_enabled }}"></span>{{ 'Gemini · suggests changes, you decide' if ai_enabled else 'Suggests changes, you decide' }}</p>
+      </div>
+    </header>
+
+    <div class="messages" id="messages" aria-live="polite">
+      {% for m in coach_messages %}
+      <div class="msg coach-msg"><p{% if loop.last %} id="coach-intro"{% endif %}>{{ m }}</p></div>
+      {% endfor %}
+    </div>
+
+    <div class="chips" id="chips">
+      <button type="button" class="chip" data-action="screenshot">Read my schedule screenshot</button>
+      {% for c in ['I prefer mornings', 'Shorten to 45 min', 'Simpler exercises', 'Why this split?'] %}
+      <button type="button" class="chip">{{ c }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="attachment" id="attachment" hidden>
+      <img id="attachment-thumb" alt="">
+      <span id="attachment-name"></span>
+      <button type="button" id="attachment-remove" aria-label="Remove image">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form class="composer" id="chat-form">
+      <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp" hidden>
+      <button type="button" class="attach" data-action="screenshot" aria-label="Attach a schedule screenshot" title="Attach a schedule screenshot">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-7.6 7.6a5 5 0 01-7.1-7.1l8.1-8.1a3.3 3.3 0 014.7 4.7l-8.1 8.1a1.7 1.7 0 01-2.4-2.4l7.4-7.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button>
+      <label for="chat-input" class="sr-only">Message the AI Coach</label>
+      <textarea id="chat-input" rows="1" data-max-length="{{ max_message }}" aria-describedby="chat-limit" placeholder="Ask to change your plan…"></textarea>
+      <button type="submit" class="send" aria-label="Send">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+    <p class="chat-limit" id="chat-limit" aria-live="polite" hidden></p>
+    <p class="fineprint">GymScheduleBot's own code plans your week; {{ 'Gemini' if ai_enabled else 'the coach' }} only reads your messages and screenshots.</p>
+
+    {% include "_preferences.html" %}
+  </aside>
+</div>
+
+<div class="toast" id="toast" role="status" hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+  <span id="toast-text"></span>
+</div>
+
+<dialog class="panel-dialog" id="event-dialog" aria-labelledby="event-dialog-title">
+  <form id="event-form" method="dialog">
+    <h2 id="event-dialog-title">Add a commitment</h2>
+    <label>What<input name="title" maxlength="60" required placeholder="e.g. Calc lecture"></label>
+    <div class="row2">
+      <label>Starts<input type="time" name="start" required value="09:00"></label>
+      <label>Ends<input type="time" name="end" required value="10:00"></label>
+    </div>
+    <label>Day<select name="day" id="event-day"></select></label>
+    <label class="check"><input type="checkbox" name="weekly" checked> Repeats every week</label>
+    <label class="check"><input type="checkbox" name="unavailable"> Mark as time I can't train</label>
+    <p class="form-error" id="event-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="link-btn danger" id="event-delete" hidden>Delete</button>
+      <span></span>
+      <button type="button" class="ghost-btn" id="event-cancel">Cancel</button>
+      <button type="submit" class="dark-btn">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="panel-dialog sync-dialog" id="sync-dialog" aria-labelledby="sync-title">
+  <h2 id="sync-title">Sync to Google Calendar</h2>
+  <p class="dlg-sub">Changes go to your GymScheduleBot calendar. Untick a week to leave it as it is. Nothing changes until you confirm.</p>
+  <div class="sync-weeks" id="sync-weeks"></div>
+  <p class="form-error" id="sync-message" hidden></p>
+  <div class="dialog-actions">
+    <span class="dlg-foot">{{ google_last_sync or '' }}</span>
+    <span></span>
+    <button type="button" class="ghost-btn" data-close>Cancel</button>
+    <button type="button" class="dark-btn" id="sync-confirm">Confirm sync</button>
+  </div>
+</dialog>
+<script id="prefs-data" type="application/json">{{ prefs_json | tojson }}</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

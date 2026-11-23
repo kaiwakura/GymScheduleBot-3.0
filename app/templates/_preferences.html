@@ -1,0 +1,118 @@
+{# The Preferences panel. Choices are a draft until "Apply changes"; app.js handles the draft. #}
+{% set split_options = [('recommended', 'Recommended'), ('full_body', 'Full Body'), ('upper_lower', 'Upper / Lower'), ('push_pull_legs', 'Push / Pull / Legs')] %}
+{% set coach_splits = {'ppl_upper_lower': 'PPL + Upper / Lower', 'ppl_six_day': 'Push / Pull / Legs, six days'} %}
+<div class="prefs-backdrop" id="prefs-backdrop" hidden></div>
+<section class="prefs" id="prefs" role="dialog" aria-modal="true" aria-labelledby="prefs-title" hidden>
+  <header class="prefs-head">
+    <h2 id="prefs-title">Preferences</h2>
+    <button type="button" class="icon-btn" data-action="close-preferences" aria-label="Close preferences without applying">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <form class="prefs-body" id="prefs-form">
+    <section class="prefs-section" aria-labelledby="prefs-calendars">
+      <h3 id="prefs-calendars">Calendars &amp; commitments</h3>
+      <p class="prefs-hint">Workouts are planned around everything ticked here.</p>
+      {% if google_connected %}
+      <div class="source-row">
+        <span class="g-mark" aria-hidden="true">G</span>
+        <span class="source-text"><b>Google Calendar</b><small>Connected · {{ google_last_sync or 'not synced yet' }}</small></span>
+        <button type="button" class="small-btn" data-action="sync-preview">Sync</button>
+      </div>
+      <p class="list-label">Counts as busy</p>
+      <div class="calendar-list" id="calendar-list"><p class="prefs-hint">Loading your calendars…</p></div>
+      {% elif google_configured %}
+      <div class="source-row">
+        <span class="g-mark" aria-hidden="true">G</span>
+        <span class="source-text"><b>Google Calendar</b><small>Not connected. Only free/busy times are read.</small></span>
+        <a class="small-btn" href="/auth/google/login">Connect</a>
+      </div>
+      {% endif %}
+      <div class="source-row mine">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+        <span class="source-text"><b>My commitments</b><small id="own-count">Added in GymScheduleBot</small></span>
+        <button type="button" class="small-btn" data-action="add-event">Add</button>
+      </div>
+      {% if google_connected %}<p class="prefs-hint">Something in Google that you also added here counts once.</p>{% endif %}
+    </section>
+
+    <section class="prefs-section" aria-labelledby="prefs-training">
+      <h3 id="prefs-training">Training</h3>
+      <fieldset class="pref">
+        <legend>Commitment</legend>
+        <div class="seg seg-5">
+          {% for value, label in [('very_light', 'Very Light'), ('light', 'Light'), ('moderate', 'Moderate'), ('high', 'High'), ('dedicated', 'Dedicated')] %}
+          <label><input type="radio" name="commitment" value="{{ value }}"{{ ' checked' if settings.commitment == value }}><span>{{ label }}</span></label>
+          {% endfor %}
+        </div>
+        <p class="prefs-hint">Choose how often you'd like to train. Your availability and recovery set the actual schedule.</p>
+      </fieldset>
+      <fieldset class="pref">
+        <legend>Workout length</legend>
+        <div class="seg seg-4">
+          {% for m in [45, 60, 75, 90] %}
+          <label><input type="radio" name="session_minutes" value="{{ m }}"{{ ' checked' if settings.session_minutes == m }}><span>{{ m }} min</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="pref">
+        <legend>Preferred time</legend>
+        <div class="seg seg-4">
+          {% for value, label in [('morning', 'Morning'), ('midday', 'Midday'), ('evening', 'Evening'), ('any', 'Any')] %}
+          <label><input type="radio" name="preferred_time" value="{{ value }}"{{ ' checked' if settings.preferred_time == value }}><span>{{ label }}</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="pref">
+        <legend>Travel buffer</legend>
+        <div class="seg seg-5">
+          {% for m in [0, 15, 30, 45, 60] %}
+          <label><input type="radio" name="buffer_minutes" value="{{ m }}"{{ ' checked' if settings.buffer_minutes == m }}><span>{{ 'None' if m == 0 else m ~ ' min' }}</span></label>
+          {% endfor %}
+        </div>
+        <p class="prefs-hint">Kept free before and after each workout for getting to and from the gym.</p>
+      </fieldset>
+      <fieldset class="pref">
+        <legend>Workout split</legend>
+        <div class="seg seg-2">
+          {% for value, label in split_options %}
+          <label><input type="radio" name="split" value="{{ value }}"{{ ' checked' if (settings.split_style or 'recommended') == value }}><span>{{ label }}</span></label>
+          {% endfor %}
+          {% if settings.split_style in coach_splits %}
+          <label><input type="radio" name="split" value="{{ settings.split_style }}" checked><span>{{ coach_splits[settings.split_style] }}</span></label>
+          {% endif %}
+        </div>
+        <div class="seg seg-2 split-scope" id="split-scope">
+          <label><input type="radio" name="split_scope" value="this_week"{{ ' checked' if settings.split_until }}><span>This week only</span></label>
+          <label><input type="radio" name="split_scope" value="ongoing"{{ ' checked' if not settings.split_until }}><span>Until I change it</span></label>
+        </div>
+      </fieldset>
+    </section>
+
+    <p class="prefs-extra">Just exploring? Try a sample week:
+      <button type="button" class="link-btn" data-action="load-sample" data-sample="busy">Busy student</button> ·
+      <button type="button" class="link-btn" data-action="load-sample" data-sample="light">9-to-5</button>
+    </p>
+    {% if google_connected %}
+    <p class="prefs-extra disconnect">
+      <button type="submit" form="disconnect-form" class="link-btn">Disconnect Google Calendar</button>
+    </p>
+    {% endif %}
+  </form>
+  {% if google_connected %}
+  {# Its button sits inside the scrolling form above; forms can't be nested. #}
+  <form method="post" action="/auth/google/logout" id="disconnect-form" hidden>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+  </form>
+  {% endif %}
+
+  <footer class="prefs-foot">
+    <p class="form-error" id="prefs-error" role="alert" hidden></p>
+    <div class="prefs-actions">
+      <span class="prefs-status" id="prefs-status" aria-live="polite">No changes yet</span>
+      <button type="button" class="ghost-btn" data-action="close-preferences">Cancel</button>
+      <button type="button" class="dark-btn" id="prefs-apply" disabled>Apply changes</button>
+    </div>
+  </footer>
+</section>

@@ -1,0 +1,184 @@
+{# The week: navigation, tools, proposals and the 7-day grid. Re-rendered after every change. #}
+{% set close_icon %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>{% endset %}
+{% set chevron %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>{% endset %}
+
+<section class="tools-row" aria-label="Week and calendar tools" data-week="{{ week_iso }}">
+  <nav class="week-nav" aria-label="Week">
+    <button type="button" class="tool-btn today-btn" data-action="go-week" data-week="today"{{ ' aria-disabled=true' if is_current_week }}>Today</button>
+    <span class="arrows">
+      <button type="button" class="tool-btn icon-only" data-action="go-week" data-week="{{ prev_week }}" aria-label="Previous week">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="tool-btn icon-only" data-action="go-week" data-week="{{ next_week }}" aria-label="Next week">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </span>
+    <h1 aria-live="polite">{{ week_label }}</h1>
+    {% if is_past_week %}<span class="week-tag">Past week</span>{% endif %}
+  </nav>
+  <div class="tools">
+    <div class="mode-switch" role="group" aria-label="Calendar mode">
+      <button type="button" data-action="mode" data-mode="plan" aria-pressed="true">Plan</button>
+      <button type="button" data-action="mode" data-mode="availability" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1L19 8l-3-3L5 16z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        Edit availability
+      </button>
+    </div>
+    <button type="button" class="dark-btn" data-action="add-event">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      Add commitment
+    </button>
+  </div>
+</section>
+
+{% if demo %}
+<div class="banner demo-banner">
+  <span>You're exploring a sample week. Edit it freely; your Google Calendar isn't used or changed while it's loaded.</span>
+  <button type="button" class="small-btn" data-action="clear-sample">Use my own schedule</button>
+</div>
+{% endif %}
+
+{% if proposal %}
+<div class="banner proposal-bar" role="status">
+  <span class="badge">Proposed</span>
+  <span class="proposal-lines">{% for line in proposal.lines %}<span>{{ line }}</span>{% endfor %}</span>
+  <span class="proposal-actions">
+    <button type="button" class="small-btn" data-action="proposal" data-accept="false" data-token="{{ proposal.token }}">Reject</button>
+    <button type="button" class="dark-btn small" data-action="proposal" data-accept="true" data-token="{{ proposal.token }}">Accept</button>
+  </span>
+</div>
+{% endif %}
+
+<div class="banner availability-bar">
+  <span>Drag across the calendar to mark time you can't train. Click a striped block to change or remove it.</span>
+  <span class="pills">
+    <span class="pill">Gym hours {{ gym_hours }}</span>
+    <button type="button" class="pill" data-action="open-preferences">{{ 'Travel buffer ' ~ buffer_minutes ~ ' min' if buffer_minutes else 'No travel buffer' }}</button>
+  </span>
+</div>
+
+{% for w in plan.warnings %}
+<p class="plan-warning" role="alert">{{ w }}</p>
+{% endfor %}
+
+<div class="week-wrap">
+  <div class="calendar{{ ' past-week' if is_past_week }}" style="--hours: {{ grid_hours }}">
+    <div class="cal-corner"></div>
+    {% for day in days %}
+    <div class="cal-head{{ ' today' if day.is_today }}{{ ' past' if day.is_past }}">
+      <span class="weekday">{{ day.weekday }}</span>
+      <span class="date-num">{{ day.date_num }}</span>
+    </div>
+    {% endfor %}
+
+    <div class="gutter" aria-hidden="true">
+      {% for h in hours %}<span style="top: {{ h.top }}%">{{ h.label }}</span>{% endfor %}
+    </div>
+    {% for day in days %}
+    <section class="day-col{{ ' today' if day.is_today }}{{ ' past' if day.is_past }}" aria-label="{{ day.weekday_long }} {{ day.date_label }}"
+             data-date="{{ day.iso }}" data-weekday="{{ day.weekday_index }}" data-label="{{ day.weekday_long }}, {{ day.date_label }}"
+             data-first-hour="{{ grid_first_hour }}" data-hours="{{ grid_hours }}">
+      {% for e in day.events %}
+      {% if e.id %}
+      <button type="button" class="block event mine{{ ' unavailable' if e.kind == 'unavailable' }}{{ ' short' if e.height < 4 }}" data-event-id="{{ e.id }}"
+              style="top: {{ e.top }}%; height: {{ e.height }}%; left: {{ e.left }}%; width: {{ e.width }}%"
+              title="{{ e.title }} · {{ e.range }} (drag to move, drag the bottom edge to resize, click to edit)">
+        <span class="e-title">{{ e.title }}</span><span class="e-time">{{ e.range }}</span>
+        <span class="resize-handle" aria-hidden="true"></span>
+      </button>
+      {% else %}
+      <div class="block event{{ ' short' if e.height < 4 }}"
+           style="top: {{ e.top }}%; height: {{ e.height }}%; left: {{ e.left }}%; width: {{ e.width }}%"
+           title="{{ e.title }} · {{ e.range }} (from Google Calendar)">
+        <span class="e-title">{{ e.title }}</span><span class="e-time">{{ e.range }}</span>
+      </div>
+      {% endif %}
+      {% endfor %}
+
+      {% for w in day.workouts %}
+      <button type="button" class="block workout t-{{ w.slug }}{{ ' compact' if w.height < 7 }}{{ ' is-past' if w.past }}{{ ' is-skipped' if w.skipped }}{{ ' is-moving' if w.proposal }}{{ ' draggable' if w.draggable }}"
+              style="top: {{ w.top }}%; height: {{ w.height }}%" data-workout="{{ w.id }}" data-name="{{ w.name }}" data-start="{{ w.start }}" data-length="{{ w.length }}"
+              aria-haspopup="dialog" aria-controls="pop-{{ w.id }}" aria-expanded="false"
+              aria-label="{{ w.name }} workout, {{ w.when }}{{ ', skipped' if w.skipped }}. Show details">
+        {% if w.proposal %}<span class="flag">Moving</span>{% endif %}
+        <span class="w-name">{{ w.name }}{% if w.skipped %} <small>(skipped)</small>{% endif %}</span>
+        <span class="w-range">{{ w.range }}</span>
+      </button>
+      {% endfor %}
+
+      {% for g in day.ghosts %}
+      <div class="block ghost t-{{ g.slug }}" style="top: {{ g.top }}%; height: {{ g.height }}%" aria-hidden="true">
+        <span class="flag">Proposed</span>
+        <span class="w-name">{{ g.name }}</span><span class="w-range">{{ g.range }}</span>
+      </div>
+      {% endfor %}
+
+      {% if day.now_top is not none %}<span class="now-line" style="top: {{ day.now_top }}%" aria-hidden="true"></span>{% endif %}
+    </section>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="plan-foot">
+  <span class="summary"><span class="split-pill">{{ plan.split_name }}</span>{{ summary }}</span>
+  {% if split_choice %}
+  <span class="split-choice">Your split: <b>{{ split_choice.label }}</b>{{ ' (this week)' if split_choice.this_week_only }}
+    <button type="button" class="link-btn" data-action="reset-split">Use recommended</button></span>
+  {% endif %}
+  <span class="legend" aria-hidden="true">
+    <span><i class="sw sw-event"></i>Commitment</span>
+    <span><i class="sw sw-workout"></i>Workout</span>
+    <span><i class="sw sw-dashed"></i>Proposed or suggested</span>
+    <span><i class="sw sw-hatch"></i>Can't train</span>
+  </span>
+</div>
+<details class="why">
+  <summary>How this plan was decided</summary>
+  <ol>
+    {% for n in plan.notes %}<li>{{ n }}</li>{% endfor %}
+    {% if plan.workouts %}<li>Weekly sets per muscle (helper muscles count half): {{ volume }}. About {{ volume_target[0] }} or more per muscle is associated with more growth.</li>{% endif %}
+  </ol>
+</details>
+
+{# Workout details: one popover per workout, placed next to its block by app.js. #}
+{% for day in days %}{% for w in day.workouts %}
+<div class="workout-pop" id="pop-{{ w.id }}" role="dialog" aria-label="{{ w.name }} details" data-workout="{{ w.id }}" hidden>
+  <div class="pop-head">
+    <div>
+      <h2>{{ w.name }}</h2>
+      <p>{{ w.when }}</p>
+    </div>
+    <button type="button" class="icon-btn" data-action="close-pop" aria-label="Close workout details">{{ close_icon }}</button>
+  </div>
+  <p class="pop-muscles">{{ w.muscles }}</p>
+  <ul class="pop-exercises">
+    {% for x in w.exercises %}
+    <li><details>
+      <summary><span class="x-name">{{ x.name }}</span><span class="x-dose">{{ x.dose }}</span>{{ chevron }}</summary>
+      <p>Rest {{ x.rest }} between sets · {{ x.muscles }}</p>
+    </details></li>
+    {% endfor %}
+  </ul>
+  <div class="pop-foot">
+    <span class="duration"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>About {{ w.minutes }} min total</span>
+    {% if w.past and not w.skipped %}
+    <button type="button" class="link-btn" data-action="skip" data-date="{{ w.date }}">I skipped this</button>
+    {% endif %}
+  </div>
+  <p class="pop-note">{{ w.effort }}</p>
+  {% if w.others %}
+  <details class="pop-others" data-workout="{{ w.id }}">
+    <summary>Other available times{{ chevron }}</summary>
+    <ul>
+      {% for o in w.others %}
+      <li><button type="button" data-action="move-to" data-workout="{{ w.id }}" data-start="{{ o.start }}">
+        <b>{{ o.label }}</b><span>{{ o.note }}</span></button></li>
+      {% endfor %}
+    </ul>
+    <p class="prefs-hint">Free in your calendar, with 48 hours or more between workouts for the same muscles.</p>
+  </details>
+  {% elif not w.past %}
+  <p class="prefs-hint">No other free time this week keeps 48 hours between workouts for the same muscles.</p>
+  {% endif %}
+</div>
+{% endfor %}{% endfor %}
